@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>自助认证</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            width: 400px;
+            max-width: 90%;
+        }
+
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            color: #555;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            outline: none;
+        }
+
+        input[type="text"]:focus {
+            border-color: #74b9ff;
+            box-shadow: 0 0 0 3px rgba(116, 185, 255, 0.1);
+        }
+
+        .button-container {
+            margin: 30px 0 20px 0;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(116, 185, 255, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .countdown {
+            font-size: 14px;
+        }
+
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+            min-height: 20px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #74b9ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>用户认证</h2>
+    <div class="input-group">
+        <label>用户名:</label>
+        <input type="text" id="username" placeholder="请输入用户名">
+    </div>
+    <div class="input-group">
+        <label>认证码:</label>
+        <input type="text" id="code" placeholder="请输入认证码">
+    </div>
+    <div class="button-container">
+        <button id="activateBtn" onclick="activate()">激活</button>
+    </div>
+    <div id="result"></div>
+</div>
+
+<script>
+    let isRequesting = false;
+    let cooldownTimer = null;
+
+    function activate() {
+        if (isRequesting) return;
+
+        var username = document.getElementById('username').value.trim();
+        var code = document.getElementById('code').value.trim();
+        var resultDiv = document.getElementById('result');
+        var button = document.getElementById('activateBtn');
+
+        // 验证输入
+        if (!username || !code) {
+            showResult('请输入用户名和认证码', 'error');
+            return;
+        }
+
+        // 开始请求状态
+        isRequesting = true;
+        button.disabled = true;
+        button.innerHTML = '<span class="loading"></span>激活中...';
+        resultDiv.innerHTML = '';
+        resultDiv.className = '';
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/active?user=' + encodeURIComponent(username) +
+            '&code=' + encodeURIComponent(code), true);
+
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4) {
+                isRequesting = false;
+
+                if (xhr.status === 200) {
+                    showResult(xhr.responseText, 'success');
+                    startCooldown(3); // 成功后3秒冷却
+                } else {
+                    showResult('请求失败，请稍后重试', 'error');
+                    startCooldown(5); // 失败后5秒冷却
+                }
+            }
+        };
+
+        xhr.onerror = function() {
+            isRequesting = false;
+            showResult('网络错误，请检查网络连接', 'error');
+            startCooldown(5);
+        };
+
+        xhr.ontimeout = function() {
+            isRequesting = false;
+            showResult('请求超时，请稍后重试', 'error');
+            startCooldown(5);
+        };
+
+        xhr.timeout = 10000; // 10秒超时
+        xhr.send();
+    }
+
+    function showResult(message, type) {
+        var resultDiv = document.getElementById('result');
+        resultDiv.innerHTML = message;
+        resultDiv.className = type;
+    }
+
+    function startCooldown(seconds) {
+        var button = document.getElementById('activateBtn');
+        var remainingTime = seconds;
+
+        function updateButton() {
+            if (remainingTime > 0) {
+                button.innerHTML = `请稍等 (${remainingTime}s)`;
+                button.disabled = true;
+                remainingTime--;
+                cooldownTimer = setTimeout(updateButton, 1000);
+            } else {
+                button.innerHTML = '激活';
+                button.disabled = false;
+            }
+        }
+
+        updateButton();
+    }
+
+    // 清理定时器
+    window.addEventListener('beforeunload', function() {
+        if (cooldownTimer) {
+            clearTimeout(cooldownTimer);
+        }
+    });
+
+    // 回车键激活
+    document.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !isRequesting && !document.getElementById('activateBtn').disabled) {
+            activate();
+        }
+    });
+</script>
+</body>
+</html>
